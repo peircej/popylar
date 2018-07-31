@@ -1,11 +1,52 @@
 import os.path as op
+import sys
+import platform
 import requests
 import uuid
 import configparser
 import threading
+import logging
 
 
 popylar_path = op.join(op.expanduser('~'), '.popylar')
+
+# create a session so that we can adde user-agent headers
+session = requests.Session()
+
+
+def set_user_agent(ua_string=None, app='popylar', version=None):
+    """Set the user-agent of the session to contain information about the system
+
+    Either provide a full user-agent string of your own 
+    (e.g. https://developers.whatismybrowser.com/useragents/explore/operating_system_name/linux/)
+    or specify your app name/version 
+    """
+    if not ua_string:
+        # start with the app name
+        agentStr = app
+        # add a version number if appropriate
+        if app == 'popylar' and not version:
+            version = __version__
+        if version:
+            agentStr += "/{}".format(version)
+        # then add platform info in parenths
+        if sys.platform == 'darwin':
+            ver = '.'.join(platform.mac_ver()[0].split('.')[:-1])  # e.g. 10.6
+            agentStr += " (Macintosh; Intel Mac OS X {})".format(ver)
+        elif sys.platform == 'win32':
+            if platform.architecture()[0] == '64bit':
+                arch = 'x64'
+            else:
+                arch = 'x86'
+            ver = '.'.join(platform.win32_ver()[1].split('.')[:-1])
+            agentStr += " (Windows NT {}; {})".format(ver, arch)
+        elif sys.platform.startswith('linux'):
+            arch = platform.machine()
+            dist, ver = platform.dist()
+            ver = '.'.join(platform.distr.split('.')[:-1])
+            agentStr += " (X11; Linux {}; {})".format(ver, arch)
+    logging.debug('user-agent: {}'.format(agentStr))
+    session.headers.update({'user-agent': agentStr})
 
 
 def get_or_create_config():
@@ -59,7 +100,7 @@ def _get_uid():
 
 def _do_it(data, timeout):
     try:
-        response = requests.post('http://www.google-analytics.com/collect',
+        response = session.post('http://www.google-analytics.com/collect',
                                  data=data, timeout=timeout)
         return response
     except:
